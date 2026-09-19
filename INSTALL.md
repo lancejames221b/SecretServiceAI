@@ -94,7 +94,9 @@ Build brief for the agent:
 
 - **Composer (recipient-first):** pick a recipient from contacts, type
   the note, choose signed or unsigned, pick the carrier (header,
-  signature, logo, meme). Output is a downloadable `.eml` draft for
+  signature, logo, meme), and write the decoy cover in its editable
+  field (the agent generates a fresh AI-written decoy per message;
+  never a canned template). Output is a downloadable `.eml` draft for
   email carriers (the owner sends it from their mail client), or a
   lossless PNG for meme mode (text it as a file/document, never as a
   photo).

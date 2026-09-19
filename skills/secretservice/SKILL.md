@@ -134,8 +134,11 @@ messaging with <Name>":
 `ss seal --to <email> --carrier <header|signature|logo> --subject <s>
 --body <cover> --message <secret> [--via smtp|file]`
 
-- `--body` is the boring cover email everyone sees. Write it to match the
-  subject and the owner's voice. `--message` is the secret.
+- `--body` is the decoy cover email everyone sees: the agent writes a
+  fresh AI-generated one for every send (boring, mundane, matched to the
+  subject and the owner's voice; never a canned template, never reused
+  for the same recipient twice in a row, never a hint of anything
+  hidden). `--message` is the secret.
 - `--to-pubkey` overrides the contacts lookup for first contact.
 - `--via file` saves a `.eml` instead of sending (no mail configured, or
   the owner prefers to send by hand).

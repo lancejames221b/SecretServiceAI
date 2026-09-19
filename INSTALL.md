@@ -80,3 +80,35 @@ Key exchange with a new person is in the skill under "Adding a new
 person". The short version: if their mail already advertises a key,
 `ss watch` files it automatically; otherwise send the intro email from
 `onboard/intro-email.txt` with `decryptor/ss-decrypt.py` attached.
+
+## 6. Optional: the agent console (graphical front end)
+
+If the owner prefers point-and-click over the terminal, build them a
+private Secretservice Console: a fullstack artifact with a composer, a
+receiver, and a system panel. It must stay private (fullstack artifacts
+cannot be published — which is exactly right for a key-handling tool).
+Each owner gets their own, built by their own agent against their own
+keys; the Gmail transport from step 3 does the rest.
+
+Build brief for the agent:
+
+- **Composer (recipient-first):** pick a recipient from contacts, type
+  the note, choose signed or unsigned, pick the carrier (header,
+  signature, logo, meme). Output is a downloadable `.eml` draft for
+  email carriers (the owner sends it from their mail client), or a
+  lossless PNG for meme mode (text it as a file/document, never as a
+  photo).
+- **Receiver (explicit):** paste a raw email or sealed block, click
+  Open. It decrypts server-side and reports the trust status: VERIFIED
+  (pinned key), SIGNED (new/untrusted key), KEY CHANGED (warning), or
+  UNSIGNED.
+- **System panel:** local public keys (encryption + signing, with
+  copy buttons), contacts list, filed inbox messages from `ss watch`,
+  and batch member detection (`ss members`).
+- **Backend:** shell out to the local `ss` CLI (`ss seal --dry-run`,
+  `ss open`, `ss contacts`, `ss contact-add`, `ss members`,
+  `ss keygen`/`pubkey`, `ss sig-keygen`/`sig-pubkey`,
+  `ss meme-seal`/`meme-open`). Do not reimplement the crypto.
+- **Security rules (binding):** private key bytes never leave the
+  server side and are never sent to the browser; inbox plaintext is
+  shown only after an explicit Open action; never log plaintext.

@@ -302,6 +302,17 @@ def cmd_setup(args):
         pub = crypto.pubkey_of(label)
         print("(key '%s' already exists - keeping it)" % label)
 
+    sig_pub = None
+    sig = input("\nAlso create a signing key? Recommended: it proves sealed "
+                "messages\ncame from you, which matters when the recipient acts "
+                "on them. [Y/n]: ").strip().lower()
+    if sig != "n":
+        try:
+            sig_pub = crypto.sig_generate(label)
+        except FileExistsError:
+            sig_pub = crypto.sig_pubkey_of(label)
+            print("(signing key '%s' already exists - keeping it)" % label)
+
     if choice == "2":
         _setup_email()
     elif choice == "3":
@@ -315,6 +326,11 @@ def cmd_setup(args):
     print("\nThis is your PUBLIC key. Send it to whoever you want sealed")
     print("messages from. It is safe to share - it cannot be used against you:")
     print(pub)
+    if sig_pub:
+        print("\nThis is your PUBLIC signing key. Share it alongside the key")
+        print("above so others can verify your signed messages:")
+        print(sig_pub)
+        print("\nSign a sealed message any time with:  ss seal ... --sign")
     if choice == "1":
         print("\nWhat happens next: when someone sends you a sealed email, save")
         print("it via Show original / Download original, then run:")

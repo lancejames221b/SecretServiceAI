@@ -15,7 +15,9 @@ secretservice skill from this repo and set it up."* The skill at
 `skills/secretservice/SKILL.md` teaches the agent everything: the
 conversational interface ("send a secret note to X", "check for secret
 messages"), key exchange, signing, member detection, and the discretion
-rules. That is the whole onboarding.
+rules. The agent-side install walkthrough (package, skill, `ss setup`
+wizard, verification) is in [INSTALL.md](INSTALL.md). That is the whole
+onboarding.
 
 ## Why agents
 

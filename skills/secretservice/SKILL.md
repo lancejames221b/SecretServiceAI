@@ -15,8 +15,11 @@ Conversational triggers from your owner:
 - "Send this as a sealed meme to <Name>" (with an image attached)
 
 If the tool is not installed yet, walk the owner through it: `pip install
-secretservice-mail`, then `ss setup` (a guided walkthrough: read-only key,
-full email, or meme mode). The owner types their app password once; you
+git+https://github.com/lancejames221b/SecretServiceAI.git` (until the
+PyPI release, then `pip install secretservice-mail`), then `ss setup` —
+the guided wizard: read-only key, full email, or meme mode, with an
+optional signing key. Full agent install walkthrough is in INSTALL.md
+at the repo root. The owner types their app password once; you
 never see it, never store it anywhere but the tool's own 0600 config.
 
 ## Crypto and key management

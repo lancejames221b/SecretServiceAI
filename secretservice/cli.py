@@ -206,6 +206,34 @@ def cmd_members(args):
                 addr = _addr_of(sc.get("from", ""))
                 if addr in candidates:
                     candidates[addr]["signals"].add("sent sealed mail [filed]")
+        # Live check: recent mail from each address, so a member who wrote
+        # before the last watch still gets caught. Advertised keys found
+        # here are harvested into contacts (learning).
+        cfg = transport.load_config()
+        if cfg:
+            for addr in addrs:
+                try:
+                    found = transport.imap_search(
+                        cfg, "FROM %s" % addr, 3,
+                        since_minutes=90 * 24 * 60)
+                except Exception as e:
+                    print("warning: live check failed for %s: %s"
+                          % (addr, str(e)[:120]), file=sys.stderr)
+                    continue
+                for _uid, raw in found:
+                    _collect_signals(candidates, addr, "", raw)
+                    pk = mime.sender_pubkey_from_raw(raw)
+                    sk = mime.sender_sigkey_from_raw(raw)
+                    if pk or sk:
+                        _note_contact(addr, pk, sk)
+                    for pkb in mime.photo_keys_from_raw(raw):
+                        _note_contact(addr, pkb)
+                if found:
+                    candidates[addr]["signals"].add(
+                        "live mail checked (%d message%s, 90d)"
+                        % (len(found), "s" if len(found) != 1 else ""))
+        else:
+            print("(no mail configured: live check skipped - run `ss setup`)")
     else:
         cfg = transport.load_config()
         if not cfg:
@@ -282,6 +310,80 @@ def cmd_meme_open(args):
         print("%s" % e)
         return
     print("Opened with key: %s\n%s" % (label, plaintext))
+
+
+def _onboard_file(name):
+    """Locate a bundled onboard/decryptor file: installed package data
+    first, then the source tree (repo root). Returns a path or None."""
+    try:
+        from importlib import resources as _res
+        p = _res.files("secretservice").joinpath("data", name)
+        if p.is_file():
+            return str(p)
+    except Exception:
+        pass
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for cand in (os.path.join(root, "onboard", name),
+                 os.path.join(root, "decryptor", name),
+                 os.path.join(root, name)):
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def _read_onboard_file(name):
+    p = _onboard_file(name)
+    if not p:
+        raise SystemExit("error: bundled file '%s' not found" % name)
+    with open(p, "rb") as f:
+        return f.read()
+
+
+def cmd_onboard(args):
+    """Send the key-exchange intro email with the portable decryptor
+    attached. One command: template + personalization + attachments."""
+    to_addr = args.to.strip()
+    if "@" not in to_addr:
+        raise SystemExit("error: --to does not look like an email address")
+    to_name = args.name.strip() or to_addr
+    cfg = transport.load_config()
+    from_name = args.from_name.strip()
+    if not from_name and cfg:
+        from_name = cfg.get("from_addr") or cfg.get("username") or ""
+    if not from_name:
+        raise SystemExit("error: pass --from-name 'Your Name' (no mail "
+                         "configured and no name given)")
+    from_addr = (cfg.get("from_addr") if cfg else "") or args.from_addr \
+        or "me@example.com"
+    template = _read_onboard_file("intro-email.txt").decode("utf-8")
+    dec = _read_onboard_file("ss-decrypt.py")
+    readme = _read_onboard_file("README.md")
+    sender_pubkey = sender_sigkey = None
+    try:
+        sender_pubkey = crypto.pubkey_of("personal")
+    except Exception:
+        pass
+    try:
+        sender_sigkey = crypto.sig_pubkey_of("personal")
+    except Exception:
+        pass
+    if not sender_pubkey:
+        print("warning: no 'personal' key yet - sending without pubkey "
+              "header (run `ss setup` first)", file=sys.stderr)
+    raw = mime.build_onboard_message(
+        to_addr, from_addr, to_name, from_name, template,
+        [("ss-decrypt.py", dec, "text", "x-python"),
+         ("README.md", readme, "text", "markdown")],
+        sender_pubkey=sender_pubkey, sender_sigkey=sender_sigkey)
+    dest = transport.send_sealed(raw, to_addr, via=args.via)
+    if dest.startswith("smtp:"):
+        print("Intro email sent to %s." % to_addr)
+    else:
+        print("Intro email draft written to %s" % dest)
+        print("Send it from any mail client (or show the owner first).")
+    print("When they reply with their public key, file it:")
+    print("  ss contact-add --email %s --name '%s' --pubkey '<key>'"
+          % (to_addr, to_name))
 
 
 def cmd_setup(args):
@@ -528,6 +630,8 @@ def cmd_seal(args):
         sig_name=args.sig_name or "",
         sender_pubkey=sender_pubkey,
         sender_sigkey=sender_sigkey,
+        in_reply_to=args.in_reply_to,
+        references=args.references,
     )
 
     if args.dry_run:
@@ -645,6 +749,10 @@ def cmd_watch(args):
             dirty = True
             continue
         signed, verified, signer_key, clean = _verify_signed(raw, plaintext)
+        # Threading context for sealed replies: original Message-ID plus the
+        # visible decoy, so a reply can thread under it and read as a natural
+        # reply to the cover topic.
+        thread = mime.thread_info_from_raw(raw)
         sidecar = {
             "id": mid,
             "from": from_hdr,
@@ -654,6 +762,8 @@ def cmd_watch(args):
             "signed": signed,
             "verified": verified,
             "signer_key": signer_key,
+            "message_id": thread["message_id"],
+            "decoy": thread["decoy"],
             "received_at": _time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         }
         _write_private_text(txt_path, clean)
@@ -679,6 +789,22 @@ def build_parser():
 
     su = sub.add_parser("setup", help="guided first-run walkthrough")
     su.set_defaults(func=cmd_setup)
+
+    ob = sub.add_parser("onboard",
+                      help="send the key-exchange intro email with the "
+                           "portable decryptor attached")
+    ob.add_argument("--to", required=True, help="recipient email address")
+    ob.add_argument("--name", default="",
+                    help="recipient's name for the greeting")
+    ob.add_argument("--from-name", default="",
+                    help="your name for the sign-off "
+                         "(default: configured mail name)")
+    ob.add_argument("--from-addr", default="",
+                    help="your email address (default: configured)")
+    ob.add_argument("--via", default=None, choices=["smtp", "file"],
+                    help="send via configured SMTP or write a .eml draft "
+                         "(default: smtp if configured, else file)")
+    ob.set_defaults(func=cmd_onboard)
 
     mm = sub.add_parser("meme-seal", help="hide a secret in a meme image for texting")
     mm.add_argument("--image", required=True, help="input image (PNG or JPG)")
@@ -790,6 +916,12 @@ def build_parser():
                         "the --from-key label; --sign <label> uses that "
                         "label's key (create one with: ss sig-keygen --name "
                         "<label>).")
+    s.add_argument("--in-reply-to", default=None, metavar="MSGID",
+                   help="Message-ID being replied to; sets In-Reply-To so a "
+                        "sealed reply threads under the original decoy")
+    s.add_argument("--references", default=None, metavar="MSGIDS",
+                   help="References header chain for a sealed reply "
+                        "(space-separated Message-IDs)")
     s.add_argument("--dry-run", default=None, metavar="PATH",
                    help="write the MIME to PATH instead of sending")
     s.set_defaults(func=cmd_seal)

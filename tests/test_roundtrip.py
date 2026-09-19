@@ -109,6 +109,50 @@ def main():
     _, mplain = crypto.try_decrypt(env)
     check("meme payload decrypts", mplain == SECRET)
 
+
+    # Sealed replies thread under the original decoy (In-Reply-To/References).
+    try:
+        ss_main(["seal", "--to-pubkey", pub, "--carrier", "header",
+                 "--body", "Sounds good, see you Thursday.",
+                 "--message", SECRET, "--subject", "Re: Thursday",
+                 "--to", "a@example.com",
+                 "--in-reply-to", "<orig123@example>",
+                 "--references", "<orig123@example>",
+                 "--dry-run", dry])
+        rc = 0
+    except SystemExit as e:
+        rc = e.code or 0
+    except Exception as e:
+        rc = 1
+        print("seal reply raised: %s" % e)
+    check("ss seal --in-reply-to exits 0", rc == 0)
+    raw = open(dry, "rb").read()
+    check("In-Reply-To header set", b"In-Reply-To: <orig123@example>" in raw)
+    check("References header set", b"References: <orig123@example>" in raw)
+    info = mime.thread_info_from_raw(raw)
+    check("thread_info reads subject", info["subject"] == "Re: Thursday")
+    check("thread_info reads decoy",
+          info["decoy"] == "Sounds good, see you Thursday.")
+
+    # thread_info strips stego zero-width chars from the decoy.
+    sig_raw = mime.build_message("a@example.com", "me@example.com", "s",
+                                 "Hi.\n\n-- \nLance", "signature", env)
+    sinfo = mime.thread_info_from_raw(sig_raw)
+    check("decoy has no zero-width chars",
+          "\u200b" not in sinfo["decoy"] and "\u2060" not in sinfo["decoy"])
+    check("decoy keeps visible text", "Hi." in sinfo["decoy"])
+
+    # Onboard email: template personalization + attachments + key headers.
+    ob = mime.build_onboard_message(
+        "new@example.com", "me@example.com", "New Person", "Me",
+        "Subject: Hi\n\nHi <Name>,\n\n- <Your Name>",
+        [("ss-decrypt.py", b"print('x')", "text", "x-python")],
+        sender_pubkey=pub)
+    check("onboard personalizes name", b"Hi New Person," in ob)
+    check("onboard signs name", b"- Me" in ob)
+    check("onboard attaches decryptor", b"ss-decrypt.py" in ob)
+    check("onboard carries pubkey header", pub.encode() in ob)
+
     print("ALL ROUND-TRIP TESTS PASSED")
 
 

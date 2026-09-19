@@ -106,7 +106,9 @@ at once:
   signals (key headers, signing-key headers, stego photo keys, sealed
   mail, known contacts). Any IMAP search text works.
 - `ss members --emails a@example.com,b@example.com`: check addresses
-  directly against contacts and filed inbox notes.
+  directly: contacts, filed inbox notes, plus a live IMAP check of each
+  address's recent mail (90d) for member signals. Any advertised keys
+  found are harvested into contacts automatically.
 
 A "member" is any sender with a key on file, advertising a key, or having
 sent sealed mail.
@@ -117,12 +119,14 @@ sent sealed mail.
 carries the header or a photo with a hidden key, `ss watch` files it
 automatically.
 
-**Path 2 — onboard them (conversational).** The owner says "set up secret
+**Path 2 — onboard them (one command).** The owner says "set up secret
 messaging with <Name>":
-1. Draft the intro email from `onboard/intro-email.txt`, personalized.
-   Attach `decryptor/ss-decrypt.py` and `decryptor/README.md`.
+1. Build the draft first: `ss onboard --to <email> --name '<name>'
+   --via file`. It personalizes `onboard/intro-email.txt` and attaches
+   `decryptor/ss-decrypt.py` and `decryptor/README.md`.
 2. Show the owner the exact recipient, subject, body, and attachments.
-   Send only after they approve the exact external message.
+   Send only after they approve the exact external message:
+   `ss onboard --to <email> --name '<name>'` (sends via configured SMTP).
 3. They run the decryptor's two steps and reply with their public key.
 4. File it: `ss contact-add --email <addr> --name '<name>'
    --pubkey '<key>'`.
@@ -145,6 +149,22 @@ messaging with <Name>":
 - If the owner has not approved this exact send before, show them the
   recipient, subject, body, and carrier first. Follow-ups within an
   already-approved pattern do not need re-approval.
+
+### Replying in a sealed thread
+
+A sealed reply should look like a reply. When answering a sealed thread:
+
+1. Read the filed sidecar (`~/.local/share/secretservice/inbox/<id>.json`)
+   for the original: `message_id` for threading, `decoy` for cover context,
+   `subject` for the `Re:` line.
+2. Generate the reply decoy as a natural reply to the original decoy's topic
+   (reference it, don't start a new one). Same AI-decoy rules as any send.
+3. Seal with threading: `ss seal --to <email> --subject "Re: <subject>"
+   --body <reply-decoy> --message <secret>
+   --in-reply-to "<message_id>" --references "<message_id>"`.
+   For a longer thread, `--references` takes the whole space-separated chain.
+4. The reply is itself a sealed carrier, so the visible thread stays an
+   ordinary-looking conversation while every message carries its payload.
 
 ## Receiving
 

@@ -24,6 +24,9 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 
+[tool.setuptools.package-data]
+secretservice = ["data/*"]
+
 [project.scripts]
 ss = "secretservice.cli:main"
 

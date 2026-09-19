@@ -1,0 +1,30 @@
+Subject: A private channel for us
+
+Hi <Name>,
+
+I'd like us to have a genuinely private channel for the sensitive stuff.
+I've attached a small tool that makes this work over ordinary email.
+
+How it works, in plain terms: the tool creates a private key that never
+leaves your computer, plus a public key you send back to me. From then on,
+some of my normal-looking emails will carry a private note that only your
+key can open. Nobody in between, not even the email provider, can read it.
+The emails themselves look completely boring, which is the point.
+
+To set it up (five minutes, once):
+
+1. Save the attached ss-decrypt.py somewhere handy.
+2. Make sure you have Python 3, then run once:  pip install pynacl
+3. Run:  python3 ss-decrypt.py --genkey mykey.key
+4. It prints your public key. Reply to this email with that key.
+
+The attached README walks through it step by step, including how to open
+a sealed email when one arrives (save the email via "Show original" in
+Gmail on a desktop browser, then run the tool on the saved file).
+
+Keep the mykey.key file private. Everything else is safe to forward.
+
+Best,
+<Your Name>
+
+Attachments: ss-decrypt.py, README.md (from the decryptor/ folder)

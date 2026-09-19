@@ -103,7 +103,11 @@ Build brief for the agent:
 - **Receiver (explicit):** paste a raw email or sealed block, click
   Open. It decrypts server-side and reports the trust status: VERIFIED
   (pinned key), SIGNED (new/untrusted key), KEY CHANGED (warning), or
-  UNSIGNED.
+  UNSIGNED. Offer "Reply sealed": it opens the composer pre-threaded
+  (`In-Reply-To`/`References` from the original's `Message-ID`, `Re:`
+  subject) with the original decoy shown for context, so the agent writes
+  the reply decoy as a natural reply to the original cover and the visible
+  thread stays legitimate.
 - **System panel:** local public keys (encryption + signing, with
   copy buttons), contacts list, filed inbox messages from `ss watch`,
   and batch member detection (`ss members`).

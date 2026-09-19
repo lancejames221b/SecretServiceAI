@@ -35,12 +35,14 @@ def _html_cover(body, sig_name):
 
 def build_message(to_addr, from_addr, subject, body, carrier, envelope,
                   logo_path=None, sig_name="", sender_pubkey=None,
-                  sender_sigkey=None):
+                  sender_sigkey=None, in_reply_to=None, references=None):
     """Build the full MIME message (bytes) for one sealed envelope.
 
     sender_pubkey: base64 X25519 key advertised in the X-Public-Key header
     so the recipient can reply secretly. sender_sigkey: base64 Ed25519
     verify key advertised in X-Signing-Key when the message is signed.
+    in_reply_to / references: Message-ID threading headers for sealed
+    replies, so the reply nests under the original decoy in the thread.
     """
     if carrier not in CARRIERS:
         raise ValueError("carrier must be one of: %s" % ", ".join(CARRIERS))
@@ -49,6 +51,10 @@ def build_message(to_addr, from_addr, subject, body, carrier, envelope,
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg["Subject"] = subject
+    if in_reply_to:
+        msg["In-Reply-To"] = in_reply_to
+    if references:
+        msg["References"] = references
     if sender_pubkey:
         msg[PUBKEY_HEADER] = sender_pubkey
     if sender_sigkey:
@@ -150,6 +156,69 @@ def photo_keys_from_raw(raw_bytes):
         if key and key not in found:
             found.append(key)
     return found
+
+
+def thread_info_from_raw(raw_bytes):
+    """Threading context for a sealed reply. Returns a dict with
+    message_id, references, subject, from, and decoy (the visible cover
+    text, for writing a reply-shaped decoy). Never raises; missing values
+    come back as empty strings. The decoy is ordinary visible mail, not
+    secret, so it is safe to keep for reply context."""
+    info = {"message_id": "", "references": "", "subject": "",
+            "from": "", "decoy": ""}
+    try:
+        msg = message_from_bytes(raw_bytes, policy=policy.default)
+    except Exception:
+        return info
+    try:
+        info["message_id"] = (msg.get("Message-ID") or "").strip()
+        info["references"] = (msg.get("References") or "").strip()
+        info["subject"] = (msg.get("Subject") or "").strip()
+        info["from"] = (msg.get("From") or "").strip()
+        decoy = (_plain_text(msg) or "").strip()
+        # Strip stego zero-width payload chars so the decoy reads clean.
+        for zc in ("\u200b", "\u200c", "\u2060"):
+            decoy = decoy.replace(zc, "")
+        info["decoy"] = decoy
+    except Exception:
+        pass
+    return info
+
+
+def build_onboard_message(to_addr, from_addr, to_name, from_name,
+                         template_text, attachments,
+                         sender_pubkey=None, sender_sigkey=None):
+    """Key-exchange intro email with files attached.
+
+    template_text starts with a "Subject: ..." line, then the body, with
+    <Name> and <Your Name> placeholders. attachments is a list of
+    (filename, bytes, maintype, subtype). Returns the full MIME bytes.
+    Carries the public-key headers like every other outgoing mail, so a
+    recipient agent harvests the key even before the decryptor round-trip.
+    """
+    lines = template_text.split("\n")
+    subject = "A private channel for us"
+    if lines and lines[0].lower().startswith("subject:"):
+        subject = lines[0][len("subject:"):].strip()
+        body = "\n".join(lines[1:]).lstrip("\n")
+    else:
+        body = template_text
+    body = body.replace("<Name>", to_name).replace("<Your Name>", from_name)
+
+    msg = EmailMessage()
+    msg["From"] = ("%s <%s>" % (from_name, from_addr)) if from_name \
+        else from_addr
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    if sender_pubkey:
+        msg[PUBKEY_HEADER] = sender_pubkey
+    if sender_sigkey:
+        msg[SIGNKEY_HEADER] = sender_sigkey
+    msg.set_content(body)
+    for filename, data, maintype, subtype in attachments:
+        msg.add_attachment(data, maintype=maintype, subtype=subtype,
+                           filename=filename)
+    return msg.as_bytes()
 
 
 def extract_from_raw(raw_bytes):
